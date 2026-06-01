@@ -197,6 +197,41 @@
         </div>
       </section>
 
+      <!-- LOCATION TRACKER CONTROL -->
+      <section class="section-block">
+        <div class="section-header">
+          <h2><i class="fa-solid fa-location-crosshairs"></i> Live Location Tracker</h2>
+          <span class="live-badge" id="locationLiveBadge"><i class="fa-solid fa-circle"></i> Off</span>
+        </div>
+        <div class="location-card glass">
+          <div class="location-controls">
+            <button class="btn-primary" id="trackLocBtn" onclick="toggleLocationTracking()">
+              <i class="fa-solid fa-location-arrow"></i> Track My Location
+            </button>
+            <div class="simulate-group">
+              <label for="locSimulate">Simulate Area:</label>
+              <select id="locSimulate" onchange="simulateLocationChange(this.value)">
+                <option value="">-- Choose Area --</option>
+                <option value="madhapur">Madhapur, Hyderabad</option>
+                <option value="jubileehills">Jubilee Hills, Hyderabad</option>
+                <option value="gachibowli">Gachibowli, Hyderabad</option>
+                <option value="secunderabad">Secunderabad, Hyderabad</option>
+              </select>
+            </div>
+          </div>
+          <div class="location-details" id="locationDetails">
+            <div class="loc-detail-item">
+              <span class="label">Coordinates:</span>
+              <span class="value" id="locCoords">Not tracked</span>
+            </div>
+            <div class="loc-detail-item">
+              <span class="label">Address:</span>
+              <span class="value" id="locAddress">Click 'Track My Location' or select a simulated area</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- NEARBY DONORS MAP -->
       <section class="section-block">
         <div class="section-header">
@@ -257,9 +292,14 @@
             <label>Phone Number</label>
             <input type="tel" id="dPhone" placeholder="+91 XXXXX XXXXX" />
           </div>
-          <div class="input-group full-width">
+          <div class="input-group full-width location-input-wrap">
             <label>Location / City</label>
-            <input type="text" id="dLocation" placeholder="Your city or area" />
+            <div class="input-with-btn">
+              <input type="text" id="dLocation" placeholder="Your city or area" />
+              <button class="btn-location-autofill" onclick="autofillLocation('dLocation')" title="Autofill current location">
+                <i class="fa-solid fa-location-crosshairs"></i>
+              </button>
+            </div>
           </div>
         </div>
         <button class="btn-primary full-btn" onclick="registerDonor()">
@@ -318,9 +358,14 @@
             <label>Hospital Name</label>
             <input type="text" id="rHospital" placeholder="Hospital name" />
           </div>
-          <div class="input-group">
+          <div class="input-group location-input-wrap">
             <label>Location</label>
-            <input type="text" id="rLocation" placeholder="Hospital location" />
+            <div class="input-with-btn">
+              <input type="text" id="rLocation" placeholder="Hospital location" />
+              <button class="btn-location-autofill" onclick="autofillLocation('rLocation')" title="Autofill current location">
+                <i class="fa-solid fa-location-crosshairs"></i>
+              </button>
+            </div>
           </div>
         </div>
         <button class="btn-primary full-btn" onclick="submitRequest()">
@@ -457,6 +502,49 @@
       </div>
     </nav>
 
+  </div>
+
+  <!-- CHATBOT WIDGET -->
+  <div class="chatbot-container" id="chatbotContainer">
+    <!-- Chat Toggle Button -->
+    <button class="chatbot-toggle" id="chatbotToggle" onclick="toggleChatbot()">
+      <i class="fa-solid fa-comments"></i>
+      <span class="chat-badge" id="chatBadge">1</span>
+    </button>
+
+    <!-- Chat Panel -->
+    <div class="chat-panel glass" id="chatPanel">
+      <div class="chat-header">
+        <div class="chat-avatar-status">
+          <div class="chat-avatar"><i class="fa-solid fa-heart-pulse"></i></div>
+          <div class="chat-status-info">
+            <h4>HemoBot</h4>
+            <span class="status-indicator"><span class="dot"></span> Online</span>
+          </div>
+        </div>
+        <button class="chat-close-btn" onclick="toggleChatbot()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg bot">
+          <div class="msg-bubble">
+            Hello! I am HemoBot, your virtual blood donation assistant. How can I help you save lives today?
+          </div>
+          <span class="msg-time">Just now</span>
+        </div>
+      </div>
+
+      <div class="chat-chips-container">
+        <span class="chat-chip" onclick="sendQuickQuery('Who needs blood urgently right now?')">Urgent Needs</span>
+        <span class="chat-chip" onclick="sendQuickQuery('Can O- donate to AB+?')">Check Compatibility</span>
+        <span class="chat-chip" onclick="sendQuickQuery('Who is the nearest donor to me?')">Find Nearest Donor</span>
+      </div>
+
+      <div class="chat-input-area">
+        <textarea id="chatInput" placeholder="Type a message..." rows="1" onkeydown="handleChatKey(event)"></textarea>
+        <button id="chatSendBtn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>
   </div>
 
   <!-- TOAST -->

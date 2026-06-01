@@ -738,3 +738,430 @@ function closeModal() {
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModal();
 });
+
+
+// ==========================================
+// ===== LIVE LOCATION TRACKER SYSTEM =======
+// ==========================================
+
+const areaCoordinates = {
+    'Madhapur, Hyd': { lat: 17.4483, lon: 78.3741 },
+    'Secunderabad, Hyd': { lat: 17.4399, lon: 78.4983 },
+    'Gachibowli, Hyd': { lat: 17.4401, lon: 78.3489 },
+    'Jubilee Hills, Hyd': { lat: 17.4325, lon: 78.4070 }
+};
+
+let currentLat = null;
+let currentLon = null;
+let currentAddress = "Not tracked";
+let watchId = null;
+
+// Haversine formula to compute distance in km
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return parseFloat((R * c).toFixed(1));
+}
+
+// Map Lat/Lon to map coordinate percentages for visual movement
+function updateMapCenter(lat, lon) {
+    const minLat = 17.40;
+    const maxLat = 17.48;
+    const minLon = 78.30;
+    const maxLon = 78.55;
+    
+    // Invert Y axis percentage because CSS absolute top runs top-to-bottom
+    let leftPct = ((lon - minLon) / (maxLon - minLon)) * 100;
+    let topPct = 100 - (((lat - minLat) / (maxLat - minLat)) * 100);
+    
+    leftPct = Math.max(5, Math.min(95, leftPct));
+    topPct = Math.max(5, Math.min(95, topPct));
+    
+    const mapCenter = document.querySelector('.map-center');
+    if (mapCenter) {
+        mapCenter.style.left = `${leftPct}%`;
+        mapCenter.style.top = `${topPct}%`;
+        mapCenter.style.transition = 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
+    }
+}
+
+// Update donor distances dynamically based on tracked coords
+function updateDonorDistances() {
+    if (currentLat === null || currentLon === null) return;
+    
+    donors.forEach(donor => {
+        let areaCoords = areaCoordinates[donor.location];
+        if (!areaCoords) {
+            // Fallback checking
+            const locLower = donor.location.toLowerCase();
+            if (locLower.includes('madhapur')) areaCoords = areaCoordinates['Madhapur, Hyd'];
+            else if (locLower.includes('secunderabad')) areaCoords = areaCoordinates['Secunderabad, Hyd'];
+            else if (locLower.includes('gachibowli')) areaCoords = areaCoordinates['Gachibowli, Hyd'];
+            else if (locLower.includes('jubilee')) areaCoords = areaCoordinates['Jubilee Hills, Hyd'];
+            else {
+                // Fallback to custom stable random coordinate nearby
+                areaCoords = {
+                    lat: currentLat + 0.02,
+                    lon: currentLon - 0.015
+                };
+            }
+        }
+        donor.distance = calculateDistance(currentLat, currentLon, areaCoords.lat, areaCoords.lon);
+    });
+    
+    // Rerender lists
+    renderDonorGrid();
+    updateMapTooltips();
+}
+
+// Update home page map tooltips with dynamic distances
+function updateMapTooltips() {
+    const pulses = document.querySelectorAll('#mapContainer .map-pulse');
+    pulses.forEach((pulse, index) => {
+        if (index < donors.length) {
+            const donor = donors[index];
+            const tooltip = pulse.querySelector('.map-tooltip');
+            if (tooltip) {
+                const nameOnly = donor.name.split(' ')[0];
+                tooltip.innerText = `${nameOnly} · ${donor.type} (${donor.distance} km)`;
+            }
+        }
+    });
+}
+
+// Call OpenStreetMap Nominatim reverse geocoding API
+function reverseGeocode(lat, lon) {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+    
+    fetch(url, {
+        headers: {
+            'Accept-Language': 'en',
+            'User-Agent': 'HemoBridgeApp/1.0'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data && data.display_name) {
+            const fullAddress = data.display_name;
+            const parts = fullAddress.split(', ');
+            // Fetch clean shorter city/area representation
+            let shortAddress = parts.slice(0, 3).join(', ');
+            if (parts.length > 3) {
+                shortAddress += `, ${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
+            }
+            document.getElementById('locAddress').innerText = shortAddress;
+            currentAddress = shortAddress;
+        } else {
+            document.getElementById('locAddress').innerText = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+            currentAddress = `Hyderabad, coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+        }
+    })
+    .catch(err => {
+        console.error("Geocoding fetch failed:", err);
+        document.getElementById('locAddress').innerText = `Location coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+        currentAddress = `Hyderabad (Coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+    });
+}
+
+// Geolocation watch controller
+function toggleLocationTracking() {
+    const trackBtn = document.getElementById('trackLocBtn');
+    const liveBadge = document.getElementById('locationLiveBadge');
+    
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        trackBtn.innerHTML = `<i class="fa-solid fa-location-arrow"></i> Track My Location`;
+        trackBtn.className = 'btn-primary';
+        liveBadge.innerHTML = `<i class="fa-solid fa-circle"></i> Off`;
+        liveBadge.style.background = '#fee2e2';
+        liveBadge.style.color = 'var(--primary)';
+        showToast("Live location tracking paused.");
+    } else {
+        if (!navigator.geolocation) {
+            showToast("Geolocation is not supported by your browser.");
+            return;
+        }
+        
+        trackBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Locating...`;
+        
+        // Reset simulate dropdown
+        document.getElementById('locSimulate').value = "";
+        
+        watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                currentLat = position.coords.latitude;
+                currentLon = position.coords.longitude;
+                
+                document.getElementById('locCoords').innerText = `${currentLat.toFixed(5)}, ${currentLon.toFixed(5)} (Accuracy: ${position.coords.accuracy.toFixed(0)}m)`;
+                
+                liveBadge.innerHTML = `<i class="fa-solid fa-circle" style="color:var(--success)"></i> Live`;
+                liveBadge.style.background = '#d1fae5';
+                liveBadge.style.color = '#065f46';
+                
+                trackBtn.innerHTML = `<i class="fa-solid fa-circle-stop"></i> Stop Tracking`;
+                trackBtn.className = 'btn-outline';
+                
+                reverseGeocode(currentLat, currentLon);
+                updateMapCenter(currentLat, currentLon);
+                updateDonorDistances();
+            },
+            (error) => {
+                console.error("Location error callback:", error);
+                showToast("Could not locate device. Use Simulation Mode.");
+                trackBtn.innerHTML = `<i class="fa-solid fa-location-arrow"></i> Track My Location`;
+                trackBtn.className = 'btn-primary';
+                watchId = null;
+            },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
+    }
+}
+
+// Simulation selector handler
+function simulateLocationChange(value) {
+    if (!value) {
+        document.getElementById('locCoords').innerText = "Not tracked";
+        document.getElementById('locAddress').innerText = "Click 'Track My Location' or select a simulated area";
+        currentLat = null;
+        currentLon = null;
+        updateDonorDistances();
+        
+        // Reset map center pin
+        const mapCenter = document.querySelector('.map-center');
+        if (mapCenter) {
+            mapCenter.style.left = '50%';
+            mapCenter.style.top = '50%';
+        }
+        return;
+    }
+    
+    // Stop live tracking if enabled
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        const trackBtn = document.getElementById('trackLocBtn');
+        trackBtn.innerHTML = `<i class="fa-solid fa-location-arrow"></i> Track My Location`;
+        trackBtn.className = 'btn-primary';
+    }
+    
+    const liveBadge = document.getElementById('locationLiveBadge');
+    liveBadge.innerHTML = `<i class="fa-solid fa-circle" style="color:var(--warning)"></i> Sim`;
+    liveBadge.style.background = '#fef3c7';
+    liveBadge.style.color = '#92400e';
+    
+    let lat, lon, name;
+    switch(value) {
+        case 'madhapur':
+            lat = 17.4483; lon = 78.3741;
+            name = "Madhapur, Hyderabad, Telangana, India";
+            break;
+        case 'jubileehills':
+            lat = 17.4325; lon = 78.4070;
+            name = "Jubilee Hills, Hyderabad, Telangana, India";
+            break;
+        case 'gachibowli':
+            lat = 17.4401; lon = 78.3489;
+            name = "Gachibowli, Hyderabad, Telangana, India";
+            break;
+        case 'secunderabad':
+            lat = 17.4399; lon = 78.4983;
+            name = "Secunderabad, Hyderabad, Telangana, India";
+            break;
+    }
+    
+    currentLat = lat;
+    currentLon = lon;
+    currentAddress = name;
+    
+    document.getElementById('locCoords').innerText = `${lat.toFixed(5)}, ${lon.toFixed(5)} (Simulated)`;
+    document.getElementById('locAddress').innerText = name;
+    
+    updateMapCenter(lat, lon);
+    updateDonorDistances();
+    showToast(`Simulation set to ${value.toUpperCase()}`);
+}
+
+// Form integration
+function autofillLocation(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    
+    if (currentAddress && currentAddress !== "Not tracked" && currentAddress !== "Click 'Track My Location' or select a simulated area") {
+        input.value = currentAddress;
+        showToast("Location input autofilled!");
+    } else {
+        showToast("Please enable Location tracking or Simulation first!");
+    }
+}
+
+
+// ==========================================
+// ========== AI GEMINI CHATBOT =============
+// ==========================================
+
+const GEMINI_API_KEY = "AIzaSyAulWwbPvPRavn8zQt34YL_UW33TskFTdI";
+let chatOpen = false;
+let chatHistory = [];
+
+function toggleChatbot() {
+    const panel = document.getElementById('chatPanel');
+    const badge = document.getElementById('chatBadge');
+    
+    chatOpen = !chatOpen;
+    if (chatOpen) {
+        panel.style.display = 'flex';
+        badge.style.display = 'none';
+        
+        setTimeout(() => {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            document.getElementById('chatInput').focus();
+        }, 100);
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+function handleChatKey(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+function escapeHTML(str) {
+    return str.replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+    );
+}
+
+function parseMarkdown(text) {
+    let html = escapeHTML(text);
+    // Simple markdown formatting translations
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/^\*\s+(.*?)$/gm, '• $1<br>');
+    html = html.replace(/^-\s+(.*?)$/gm, '• $1<br>');
+    html = html.replace(/\n/g, '<br>');
+    return html;
+}
+
+function addChatMessage(sender, text) {
+    const chatMessages = document.getElementById('chatMessages');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `chat-msg ${sender}`;
+    
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    msgDiv.innerHTML = `
+        <div class="msg-bubble">${sender === 'bot' ? parseMarkdown(text) : escapeHTML(text)}</div>
+        <span class="msg-time">${timeStr}</span>
+    `;
+    
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function showTypingIndicator() {
+    const chatMessages = document.getElementById('chatMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'chat-msg bot typing-indicator';
+    typingDiv.id = 'chatTypingIndicator';
+    
+    typingDiv.innerHTML = `
+        <div class="msg-bubble">
+            <div class="typing-indicator-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    `;
+    
+    chatMessages.appendChild(typingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function removeTypingIndicator() {
+    const indicator = document.getElementById('chatTypingIndicator');
+    if (indicator) indicator.remove();
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    
+    addChatMessage('user', text);
+    input.value = '';
+    
+    showTypingIndicator();
+    
+    // System contextual instructions containing application state
+    const systemPrompt = `You are HemoBot, a friendly virtual assistant for Hemo-Bridge. Hemo-Bridge is India's fastest blood matching network that connects donors and patients instantly during emergencies.
+Your goal is to answer users' questions about blood donation, donor eligibility, compatibility, and Hemo-Bridge features.
+
+Here is the CURRENT LIVE STATE of the application:
+- Blood Stock Levels: ${JSON.stringify(bloodStock)}
+- Registered Donors: ${JSON.stringify(donors.map(d => ({ name: d.name, type: d.type, age: d.age, location: d.location, distance_km: d.distance })))}
+- Emergency Requests: ${JSON.stringify(requests.map(r => ({ patient: r.name, type: r.type, units: r.units, hospital: r.hospital, location: r.location, urgency: r.urgency })))}
+- User Current Address: ${currentAddress ? currentAddress : "Not tracked"}
+- User Coordinates: ${currentLat ? `${currentLat}, ${currentLon}` : "Not tracked"}
+
+Rules:
+1. Be helpful, concise, and empathetic.
+2. If the user asks for nearest donors, list them sorted by their distance. Suggest contacting them via the 'Donors' page.
+3. If there are emergency requests, mention them (especially critical or urgent ones).
+4. If asked about compatibility, explain correctly. Keep in mind: O- is the universal donor, AB+ is the universal recipient.
+5. Do not hallucinate data that is not in the live state. Refer to the registered donors and active requests directly.
+`;
+
+    chatHistory.push({ role: 'user', parts: [{ text: text }] });
+    
+    const requestBody = {
+        contents: [...chatHistory],
+        systemInstruction: {
+            parts: [{ text: systemPrompt }]
+        },
+        generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 500
+        }
+    };
+    
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        const data = await response.json();
+        removeTypingIndicator();
+        
+        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
+            const botResponse = data.candidates[0].content.parts[0].text;
+            addChatMessage('bot', botResponse);
+            chatHistory.push({ role: 'model', parts: [{ text: botResponse }] });
+        } else {
+            console.error("Gemini response structure invalid:", data);
+            addChatMessage('bot', "I ran into a bit of trouble connecting to my brain. Please try messaging me again!");
+        }
+    } catch (err) {
+        console.error("Gemini API call failed:", err);
+        removeTypingIndicator();
+        addChatMessage('bot', "I'm having trouble connecting right now. Please verify your internet connection or check back in a moment.");
+    }
+}
+
+function sendQuickQuery(text) {
+    document.getElementById('chatInput').value = text;
+    sendMessage();
+}
