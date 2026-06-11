@@ -124,6 +124,257 @@ const achievements = [
 ];
 
 
+// ===== CLIENT-SIDE CRYPTOGRAPHY (E2E LOCAL DATA PROTECTION) =====
+// Helper to convert Uint8Array to Hex string
+function bytesToHex(bytes) {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Helper to convert Hex string to Uint8Array
+function hexToBytes(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    }
+    return bytes;
+}
+
+// Derive a CryptoKey from password and salt using PBKDF2
+async function deriveKey(password, saltHex) {
+    const encoder = new TextEncoder();
+    const passwordBytes = encoder.encode(password);
+    const saltBytes = hexToBytes(saltHex);
+    
+    const baseKey = await window.crypto.subtle.importKey(
+        'raw',
+        passwordBytes,
+        { name: 'PBKDF2' },
+        false,
+        ['deriveKey']
+    );
+    
+    return await window.crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt: saltBytes,
+            iterations: 100000,
+            hash: 'SHA-256'
+        },
+        baseKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+// Encrypt payload object with password using AES-GCM (returns salt, iv, ciphertext in hex)
+async function encryptData(data, password) {
+    const encoder = new TextEncoder();
+    const dataBytes = encoder.encode(JSON.stringify(data));
+    
+    const saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+    const ivBytes = window.crypto.getRandomValues(new Uint8Array(12));
+    
+    const saltHex = bytesToHex(saltBytes);
+    const ivHex = bytesToHex(ivBytes);
+    
+    const key = await deriveKey(password, saltHex);
+    
+    const encryptedBuffer = await window.crypto.subtle.encrypt(
+        {
+            name: 'AES-GCM',
+            iv: ivBytes
+        },
+        key,
+        dataBytes
+    );
+    
+    const ciphertextHex = bytesToHex(new Uint8Array(encryptedBuffer));
+    
+    return {
+        salt: saltHex,
+        iv: ivHex,
+        ciphertext: ciphertextHex
+    };
+}
+
+// Decrypt hex payload with password using AES-GCM (returns original parsed object)
+async function decryptData(encryptedObj, password) {
+    const saltHex = encryptedObj.salt;
+    const ivHex = encryptedObj.iv;
+    const ciphertextHex = encryptedObj.ciphertext;
+    
+    const ivBytes = hexToBytes(ivHex);
+    const ciphertextBytes = hexToBytes(ciphertextHex);
+    
+    const key = await deriveKey(password, saltHex);
+    
+    const decryptedBuffer = await window.crypto.subtle.decrypt(
+        {
+            name: 'AES-GCM',
+            iv: ivBytes
+        },
+        key,
+        ciphertextBytes
+    );
+    
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(decryptedBuffer));
+}
+
+let sessionPassword = ""; // Keep password in memory for edit re-encryption
+
+// Tab Switching
+function switchLoginTab(tab) {
+    const tabBtns = document.querySelectorAll('.login-tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabBtns.forEach(btn => btn.classList.remove('active'));
+    tabContents.forEach(content => content.classList.remove('active-tab-content'));
+    
+    if (tab === 'login') {
+        document.querySelectorAll('.login-tab-btn')[0].classList.add('active');
+        document.getElementById('loginTabContent').classList.add('active-tab-content');
+    } else {
+        document.querySelectorAll('.login-tab-btn')[1].classList.add('active');
+        document.getElementById('registerTabContent').classList.add('active-tab-content');
+    }
+}
+
+// User Registration with E2E Client-side Encryption
+async function registerUser() {
+    const fullName = document.getElementById('regFullName').value.trim();
+    const phone = document.getElementById('regPhone').value.trim();
+    const age = document.getElementById('regAge').value.trim();
+    const gender = document.getElementById('regGender').value;
+    const bloodGroup = document.getElementById('regBloodGroup').value;
+    const weight = document.getElementById('regWeight').value.trim();
+    const lastDonation = document.getElementById('regLastDonation').value;
+    const password = document.getElementById('regPassword').value;
+
+    if (!fullName || !phone || !age || !gender || !bloodGroup || !weight || !password) {
+        showToast('Please fill out all registration fields.');
+        return;
+    }
+
+    if (phone.length < 10) {
+        showToast('Please enter a valid 10-digit phone number.');
+        return;
+    }
+
+    const ageNum = parseInt(age);
+    if (ageNum < 18 || ageNum > 65) {
+        showToast('Age must be between 18 and 65 for blood donation.');
+        return;
+    }
+
+    const weightNum = parseFloat(weight);
+    if (weightNum < 45) {
+        showToast('Weight must be at least 45 kg to donate blood.');
+        return;
+    }
+
+    const userData = {
+        fullName,
+        phone,
+        age: ageNum,
+        gender,
+        bloodGroup,
+        weight: weightNum,
+        lastDonation
+    };
+
+    try {
+        showToast('Encrypting and registering...');
+        const encrypted = await encryptData(userData, password);
+        localStorage.setItem('user_data_' + phone, JSON.stringify(encrypted));
+        
+        sessionPassword = password;
+        window.currentUserDetails = userData;
+        
+        // Dynamic UI Updates
+        updateAvatarUI(fullName);
+        
+        // Proceed to app
+        enterAppDashboard();
+        showToast('Registration & Encryption Successful!');
+        
+        // Clear fields
+        document.getElementById('regFullName').value = '';
+        document.getElementById('regPhone').value = '';
+        document.getElementById('regAge').value = '';
+        document.getElementById('regGender').value = '';
+        document.getElementById('regBloodGroup').value = '';
+        document.getElementById('regWeight').value = '';
+        document.getElementById('regPassword').value = '';
+    } catch (e) {
+        console.error("Encryption/Registration failed:", e);
+        showToast('Registration failed due to encryption error.');
+    }
+}
+
+// User Login with Decryption
+async function loginUser() {
+    const phone = document.getElementById('loginPhone').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    if (!phone || !password) {
+        showToast('Please enter Phone Number and Password');
+        return;
+    }
+
+    const encryptedDataStr = localStorage.getItem('user_data_' + phone);
+    if (!encryptedDataStr) {
+        showToast('Account not found. Please register first.');
+        return;
+    }
+
+    try {
+        const encryptedObj = JSON.parse(encryptedDataStr);
+        showToast('Decrypting profile securely...');
+        const decrypted = await decryptData(encryptedObj, password);
+        
+        // Validated successfully
+        sessionPassword = password;
+        window.currentUserDetails = decrypted;
+        
+        // Dynamic UI Updates
+        updateAvatarUI(decrypted.fullName);
+        
+        enterAppDashboard();
+        showToast('Login & Decryption Successful!');
+        
+        // Clear fields
+        document.getElementById('loginPhone').value = '';
+        document.getElementById('loginPassword').value = '';
+    } catch (e) {
+        console.error("Decryption/Login failed:", e);
+        showToast('Incorrect password.');
+    }
+}
+
+function updateAvatarUI(name) {
+    const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    const avatarElems = document.querySelectorAll('.top-avatar');
+    avatarElems.forEach(el => el.innerText = initials);
+    
+    // Also update dropdown name and profile info if they exist
+    const dName = document.getElementById('dropdownName');
+    if (dName) dName.innerText = name;
+    const dpAvatar = document.getElementById('dropdownAvatar');
+    if (dpAvatar) dpAvatar.innerText = initials;
+}
+
+function enterAppDashboard() {
+    document.getElementById('loginPage').style.display = 'none';
+    const mainApp = document.getElementById('mainApp');
+    mainApp.style.display = 'block';
+    setTimeout(() => {
+        mainApp.style.opacity = '1';
+        initializePageFeatures();
+    }, 50);
+}
+
 // ===== NAVIGATION & TRANSITIONS =====
 function openDashboard() {
     const splash = document.getElementById('splash');
@@ -131,7 +382,8 @@ function openDashboard() {
     
     splash.style.opacity = '0';
     splash.style.visibility = 'hidden';
-    
+    document.getElementById('loginPage').style.display = 'flex';
+    return;
     mainApp.style.display = 'block';
     setTimeout(() => {
         mainApp.style.opacity = '1';
@@ -199,14 +451,123 @@ function toggleNotifPanel() {
     const panel = document.getElementById('notifPanel');
     const isVisible = window.getComputedStyle(panel).display !== 'none';
     panel.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) {
+        document.getElementById('avatarDropdown').style.display = 'none';
+    }
 }
 
-// Close notifications when clicking outside
+function toggleAvatarDropdown() {
+    const panel = document.getElementById('avatarDropdown');
+    const isVisible = window.getComputedStyle(panel).display !== 'none';
+    panel.style.display = isVisible ? 'none' : 'flex';
+    if (!isVisible) {
+        document.getElementById('notifPanel').style.display = 'none';
+    }
+}
+
+function logoutUser() {
+    sessionPassword = "";
+    window.currentUserDetails = null;
+    
+    document.getElementById('avatarDropdown').style.display = 'none';
+    
+    document.getElementById('mainApp').style.opacity = '0';
+    setTimeout(() => {
+        document.getElementById('mainApp').style.display = 'none';
+        document.getElementById('loginPage').style.display = 'flex';
+    }, 400);
+    
+    showToast("Logged out successfully");
+}
+
+// Language Translations Dictionary
+const appTranslations = {
+    en: {
+        logo: '<i class="fa-solid fa-heart-pulse"></i> HemoBridge',
+        navHome: '<i class="fa-solid fa-house"></i><span>Home</span>',
+        navDonors: '<i class="fa-solid fa-droplet"></i><span>Donors</span>',
+        navRequest: '<div class="nav-center-btn"><i class="fa-solid fa-hospital"></i></div><span>Request</span>',
+        navAnalytics: '<i class="fa-solid fa-chart-line"></i><span>Analytics</span>',
+        navProfile: '<i class="fa-solid fa-user"></i><span>Profile</span>',
+        lblLanguage: 'Select Language',
+        lblLogout: 'Logout',
+        donorHeader: '<i class="fa-solid fa-droplet"></i> Donor Registration',
+        requestHeader: '<i class="fa-solid fa-hospital"></i> Request Blood',
+        analyticsHeader: '<i class="fa-solid fa-chart-line"></i> Analytics Dashboard',
+        toastLang: 'Language changed to English'
+    },
+    hi: {
+        logo: '<i class="fa-solid fa-heart-pulse"></i> हीमोब्रिज',
+        navHome: '<i class="fa-solid fa-house"></i><span>होम</span>',
+        navDonors: '<i class="fa-solid fa-droplet"></i><span>दाता</span>',
+        navRequest: '<div class="nav-center-btn"><i class="fa-solid fa-hospital"></i></div><span>अनुरोध</span>',
+        navAnalytics: '<i class="fa-solid fa-chart-line"></i><span>विश्लेषण</span>',
+        navProfile: '<i class="fa-solid fa-user"></i><span>प्रोफ़ाइल</span>',
+        lblLanguage: 'भाषा चुनें',
+        lblLogout: 'लॉग आउट',
+        donorHeader: '<i class="fa-solid fa-droplet"></i> रक्तदाता पंजीकरण',
+        requestHeader: '<i class="fa-solid fa-hospital"></i> रक्त का अनुरोध',
+        analyticsHeader: '<i class="fa-solid fa-chart-line"></i> विश्लेषण डैशबोर्ड',
+        toastLang: 'भाषा बदलकर हिंदी कर दी गई है'
+    },
+    te: {
+        logo: '<i class="fa-solid fa-heart-pulse"></i> హీమోబ్రిడ్జ్',
+        navHome: '<i class="fa-solid fa-house"></i><span>హోమ్</span>',
+        navDonors: '<i class="fa-solid fa-droplet"></i><span>దాతలు</span>',
+        navRequest: '<div class="nav-center-btn"><i class="fa-solid fa-hospital"></i></div><span>అభ్యర్థన</span>',
+        navAnalytics: '<i class="fa-solid fa-chart-line"></i><span>విశ్లేషణ</span>',
+        navProfile: '<i class="fa-solid fa-user"></i><span>ప్రొఫైల్</span>',
+        lblLanguage: 'భాష ఎంచుకోండి',
+        lblLogout: 'లాగ్అవుట్',
+        donorHeader: '<i class="fa-solid fa-droplet"></i> దాత నమోదు',
+        requestHeader: '<i class="fa-solid fa-hospital"></i> రక్తం అభ్యర్థన',
+        analyticsHeader: '<i class="fa-solid fa-chart-line"></i> విశ్లేషణ డాష్‌బోర్డ్',
+        toastLang: 'భాష తెలుగులోకి మార్చబడింది'
+    }
+};
+
+function changeLanguage(lang) {
+    const t = appTranslations[lang];
+    if (!t) return;
+    
+    document.querySelector('.top-logo').innerHTML = t.logo;
+    
+    const navItems = document.querySelectorAll('.bottom-nav .nav-item');
+    if (navItems.length === 5) {
+        navItems[0].innerHTML = t.navHome;
+        navItems[1].innerHTML = t.navDonors;
+        navItems[2].innerHTML = t.navRequest;
+        navItems[3].innerHTML = t.navAnalytics;
+        navItems[4].innerHTML = t.navProfile;
+    }
+    
+    document.getElementById('lblLanguage').innerText = t.lblLanguage;
+    document.querySelector('.btn-logout span').innerText = t.lblLogout;
+    
+    const donorPageTitle = document.querySelector('#donorPage .page-header h1');
+    if (donorPageTitle) donorPageTitle.innerHTML = t.donorHeader;
+    
+    const requestPageTitle = document.querySelector('#requestPage .page-header h1');
+    if (requestPageTitle) requestPageTitle.innerHTML = t.requestHeader;
+    
+    const dashPageTitle = document.querySelector('#dashPage .page-header h1');
+    if (dashPageTitle) dashPageTitle.innerHTML = t.analyticsHeader;
+    
+    showToast(t.toastLang);
+}
+
+// Close panels when clicking outside
 document.addEventListener('click', (e) => {
-    const panel = document.getElementById('notifPanel');
-    const bell = document.getElementById('notifBell');
-    if (panel && bell && !panel.contains(e.target) && !bell.contains(e.target)) {
-        panel.style.display = 'none';
+    const notifPanel = document.getElementById('notifPanel');
+    const notifBell = document.getElementById('notifBell');
+    if (notifPanel && notifBell && !notifPanel.contains(e.target) && !notifBell.contains(e.target)) {
+        notifPanel.style.display = 'none';
+    }
+    
+    const avatarDropdown = document.getElementById('avatarDropdown');
+    const topAvatar = document.getElementById('topAvatar');
+    if (avatarDropdown && topAvatar && !avatarDropdown.contains(e.target) && !topAvatar.contains(e.target)) {
+        avatarDropdown.style.display = 'none';
     }
 });
 
@@ -397,25 +758,7 @@ function renderDonorGrid() {
         return;
     }
 
-    filtered.forEach(d => {
-        const card = document.createElement('div');
-        card.className = 'donor-card';
-        card.innerHTML = `
-            <div class="top">
-                <div class="avatar">${d.name.split(' ').map(n => n[0]).join('')}</div>
-                <div class="info">
-                    <span class="name">${d.name}</span>
-                    <span class="details">Age: ${d.age} · ${d.location}</span>
-                </div>
-            </div>
-            <div class="bottom">
-                <span class="blood-type">${d.type}</span>
-                <span class="distance"><i class="fa-solid fa-location-dot"></i> ${d.distance} km</span>
-                <button class="call-btn" onclick="callDonor('${d.name}')"><i class="fa-solid fa-phone"></i></button>
-            </div>
-        `;
-        grid.appendChild(card);
-    });
+
 }
 
 function filterDonors() {
@@ -430,12 +773,81 @@ function sortDonors(criteria, element) {
     renderDonorGrid();
 }
 
+
+function checkEligibility() {
+
+    const age = document.getElementById('ageEligible').value;
+    const weight = document.getElementById('weightEligible').value;
+    const recent = document.getElementById('recentDonation').value;
+
+    const result = document.getElementById('eligibilityResult');
+    const progress = document.getElementById('eligibilityProgress');
+    const step = document.getElementById('eligibilityStep');
+    document.getElementById("donorRegisterForm").style.display = "none";
+
+    if (!age || !weight || !recent) {
+
+    progress.style.width = "0%";
+
+    step.innerHTML =
+    "Complete all eligibility questions";
+
+    result.innerHTML =
+    "⚠️ Please answer all questions";
+
+    result.style.color = "#f59e0b";
+
+    return;
+}
+
+    if (
+        age === "yes" &&
+        weight === "yes" &&
+        recent === "no"
+    ) {
+
+        result.innerHTML = "✅ Eligible To Donate";
+        result.style.color = "#22c55e";
+        progress.style.width = "100%";
+
+        step.innerHTML = "All checks completed successfully";
+
+        document.getElementById(
+        "donorRegisterForm"
+        ).style.display = "block";
+        
+        document.getElementById("donorRegisterForm").scrollIntoView({behavior: "smooth"});
+
+    } else {
+
+        result.innerHTML = "❌ Not Eligible To Donate";
+        result.style.color = "#ef4444";
+        progress.style.width = "100%";
+
+        step.innerHTML = "Eligibility requirements not met";
+
+        document.getElementById(
+        "donorRegisterForm"
+        ).style.display = "none";
+    }
+}
+
 function registerDonor() {
     const name = document.getElementById('dName').value.trim();
     const type = document.getElementById('dBlood').value;
     const age = document.getElementById('dAge').value;
     const phone = document.getElementById('dPhone').value.trim();
     const location = document.getElementById('dLocation').value.trim();
+    const eligibilityText = document.getElementById('eligibilityResult').innerText;
+
+    if (
+        eligibilityText !== '✅ Eligible To Donate'
+    ) {
+        showToast(
+        'Please pass Eligibility Check first.'
+        );
+        return;
+    }
 
     if (!name || !type || !age || !phone || !location) {
         showToast('Please fill out all registration fields.');
@@ -684,6 +1096,26 @@ function renderActivityFeed() {
 
 // ===== PROFILE RENDERS =====
 function renderProfileContent() {
+    // Render logged-in user profile details if available
+    if (window.currentUserDetails) {
+        const u = window.currentUserDetails;
+        const initials = u.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        
+        // Update hero elements
+        document.querySelector('.profile-avatar').innerText = initials;
+        document.querySelector('.profile-hero h2').innerText = u.fullName;
+        document.querySelector('.profile-blood-badge').innerText = u.bloodGroup;
+        
+        // Update details card
+        document.getElementById('profFullName').innerText = u.fullName;
+        document.getElementById('profPhone').innerText = u.phone;
+        document.getElementById('profAge').innerText = u.age;
+        document.getElementById('profGender').innerText = u.gender;
+        document.getElementById('profBlood').innerText = u.bloodGroup;
+        document.getElementById('profWeight').innerText = u.weight + " kg";
+        document.getElementById('profLastDonation').innerText = u.lastDonation === 'yes' ? 'Yes' : 'No';
+    }
+
     // Donation History
     const list = document.getElementById('historyList');
     list.innerHTML = '';
@@ -718,6 +1150,129 @@ function renderProfileContent() {
         `;
         achGrid.appendChild(card);
     });
+}
+
+// Open Edit Profile Modal
+function openEditProfileModal() {
+    if (!window.currentUserDetails) {
+        showToast("Please log in first.");
+        return;
+    }
+    const u = window.currentUserDetails;
+    
+    const contentHtml = `
+        <div class="modal-form-title">
+            <i class="fa-solid fa-user-pen"></i> Edit Profile Details
+        </div>
+        <div class="modal-form-body">
+            <div class="input-group">
+                <label>Full Name</label>
+                <input type="text" id="editFullName" value="${u.fullName}">
+            </div>
+            
+            <div class="modal-form-row">
+                <div class="input-group">
+                    <label>Age</label>
+                    <input type="number" id="editAge" min="18" max="65" value="${u.age}">
+                </div>
+                <div class="input-group">
+                    <label>Gender</label>
+                    <select id="editGender">
+                        <option value="Male" ${u.gender === 'Male' ? 'selected' : ''}>Male</option>
+                        <option value="Female" ${u.gender === 'Female' ? 'selected' : ''}>Female</option>
+                        <option value="Other" ${u.gender === 'Other' ? 'selected' : ''}>Other</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="modal-form-row">
+                <div class="input-group">
+                    <label>Blood Group</label>
+                    <select id="editBloodGroup">
+                        <option ${u.bloodGroup === 'A+' ? 'selected' : ''}>A+</option>
+                        <option ${u.bloodGroup === 'A-' ? 'selected' : ''}>A-</option>
+                        <option ${u.bloodGroup === 'B+' ? 'selected' : ''}>B+</option>
+                        <option ${u.bloodGroup === 'B-' ? 'selected' : ''}>B-</option>
+                        <option ${u.bloodGroup === 'AB+' ? 'selected' : ''}>AB+</option>
+                        <option ${u.bloodGroup === 'AB-' ? 'selected' : ''}>AB-</option>
+                        <option ${u.bloodGroup === 'O+' ? 'selected' : ''}>O+</option>
+                        <option ${u.bloodGroup === 'O-' ? 'selected' : ''}>O-</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Weight (kg)</label>
+                    <input type="number" id="editWeight" value="${u.weight}">
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label>Donated in last 3 months?</label>
+                <select id="editLastDonation">
+                    <option value="no" ${u.lastDonation === 'no' ? 'selected' : ''}>No</option>
+                    <option value="yes" ${u.lastDonation === 'yes' ? 'selected' : ''}>Yes</option>
+                </select>
+            </div>
+            
+            <button class="btn-primary full-btn" onclick="saveProfileEdit()">
+                <i class="fa-solid fa-floppy-disk"></i> Save Changes
+            </button>
+        </div>
+    `;
+    openModal(contentHtml);
+}
+
+// Save Profile Edit Changes (with local E2E re-encryption)
+async function saveProfileEdit() {
+    const fullName = document.getElementById('editFullName').value.trim();
+    const age = document.getElementById('editAge').value.trim();
+    const gender = document.getElementById('editGender').value;
+    const bloodGroup = document.getElementById('editBloodGroup').value;
+    const weight = document.getElementById('editWeight').value.trim();
+    const lastDonation = document.getElementById('editLastDonation').value;
+
+    if (!fullName || !age || !gender || !bloodGroup || !weight) {
+        showToast('Please fill out all fields.');
+        return;
+    }
+
+    const ageNum = parseInt(age);
+    if (ageNum < 18 || ageNum > 65) {
+        showToast('Age must be between 18 and 65.');
+        return;
+    }
+
+    const weightNum = parseFloat(weight);
+    if (weightNum < 45) {
+        showToast('Weight must be at least 45 kg.');
+        return;
+    }
+
+    const u = window.currentUserDetails;
+    const updatedData = {
+        fullName,
+        phone: u.phone,
+        age: ageNum,
+        gender,
+        bloodGroup,
+        weight: weightNum,
+        lastDonation
+    };
+
+    try {
+        showToast("Re-encrypting profile updates...");
+        const encrypted = await encryptData(updatedData, sessionPassword);
+        localStorage.setItem('user_data_' + u.phone, JSON.stringify(encrypted));
+        
+        window.currentUserDetails = updatedData;
+        closeModal();
+        
+        renderProfileContent();
+        updateAvatarUI(fullName);
+        showToast("Profile updated and encrypted successfully!");
+    } catch (e) {
+        console.error("Re-encryption failed:", e);
+        showToast("Failed to save changes due to encryption error.");
+    }
 }
 
 
@@ -835,37 +1390,59 @@ function updateMapTooltips() {
     });
 }
 
-// Call OpenStreetMap Nominatim reverse geocoding API
+// Call Google Geocoding API (with fallback to OpenStreetMap Nominatim reverse geocoding API)
 function reverseGeocode(lat, lon) {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+    const googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GEMINI_API_KEY}`;
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
     
-    fetch(url, {
-        headers: {
-            'Accept-Language': 'en',
-            'User-Agent': 'HemoBridgeApp/1.0'
-        }
+    fetch(googleUrl)
+    .then(res => {
+        if (!res.ok) throw new Error("Google Maps Geocoding response not OK");
+        return res.json();
     })
-    .then(res => res.json())
     .then(data => {
-        if (data && data.display_name) {
-            const fullAddress = data.display_name;
+        if (data.status === "OK" && data.results && data.results[0]) {
+            const fullAddress = data.results[0].formatted_address;
             const parts = fullAddress.split(', ');
-            // Fetch clean shorter city/area representation
             let shortAddress = parts.slice(0, 3).join(', ');
-            if (parts.length > 3) {
-                shortAddress += `, ${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
-            }
             document.getElementById('locAddress').innerText = shortAddress;
             currentAddress = shortAddress;
+            console.log("Location resolved using Google Geocoding API.");
         } else {
-            document.getElementById('locAddress').innerText = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-            currentAddress = `Hyderabad, coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+            console.warn("Google Maps Geocoding failed status:", data.status, "Falling back to Nominatim...");
+            throw new Error("Google API Status: " + data.status);
         }
     })
     .catch(err => {
-        console.error("Geocoding fetch failed:", err);
-        document.getElementById('locAddress').innerText = `Location coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-        currentAddress = `Hyderabad (Coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+        console.warn("Google Geocoding failed, trying Nominatim fallback:", err.message);
+        // Fallback to Nominatim
+        fetch(nominatimUrl, {
+            headers: {
+                'Accept-Language': 'en',
+                'User-Agent': 'HemoBridgeApp/1.0'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.display_name) {
+                const fullAddress = data.display_name;
+                const parts = fullAddress.split(', ');
+                let shortAddress = parts.slice(0, 3).join(', ');
+                if (parts.length > 3) {
+                    shortAddress += `, ${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
+                }
+                document.getElementById('locAddress').innerText = shortAddress;
+                currentAddress = shortAddress;
+            } else {
+                document.getElementById('locAddress').innerText = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                currentAddress = `Hyderabad, coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+            }
+        })
+        .catch(e => {
+            console.error("Nominatim fallback also failed:", e);
+            document.getElementById('locAddress').innerText = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+            currentAddress = `Hyderabad (Coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+        });
     });
 }
 
@@ -1165,3 +1742,27 @@ function sendQuickQuery(text) {
     document.getElementById('chatInput').value = text;
     sendMessage();
 }
+
+// Seed default user (Akshay Kumar) into localStorage on load
+async function seedDefaultUser() {
+    const defaultPhone = "9876543210";
+    if (!localStorage.getItem('user_data_' + defaultPhone)) {
+        const defaultUser = {
+            fullName: "Akshay Kumar",
+            phone: defaultPhone,
+            age: 28,
+            gender: "Male",
+            bloodGroup: "O+",
+            weight: 75,
+            lastDonation: "no"
+        };
+        try {
+            const encrypted = await encryptData(defaultUser, "password");
+            localStorage.setItem('user_data_' + defaultPhone, JSON.stringify(encrypted));
+            console.log("Default user seeded successfully.");
+        } catch (e) {
+            console.error("Failed to seed default user:", e);
+        }
+    }
+}
+seedDefaultUser();
