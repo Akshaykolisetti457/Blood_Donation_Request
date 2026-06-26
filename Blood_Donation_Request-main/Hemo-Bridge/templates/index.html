@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hemo Bridge – Save Lives, Be a Hero</title>
+  <meta name="description" content="Hemo Bridge connects blood donors with patients instantly during emergencies. Find donors, request blood, and save lives." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+ <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- PARTICLES -->
+  <canvas id="particleCanvas"></canvas>
+
+  <!-- ===== SPLASH SCREEN ===== -->
+  <section class="splash-screen" id="splash">
+    <div class="splash-orb orb1"></div>
+    <div class="splash-orb orb2"></div>
+    <div class="splash-orb orb3"></div>
+    <div class="splash-content">
+      <div class="splash-logo">
+        <div class="logo-ring"></div>
+        <i class="fa-solid fa-heart-pulse logo-icon"></i>
+      </div>
+      <h1 class="splash-title">Hemo<span>Bridge</span></h1>
+      <p class="splash-tagline">Save Lives · Be a Hero · Every Drop Counts</p>
+      <div class="heartbeat-wrap">
+        <svg viewBox="0 0 400 80" preserveAspectRatio="none">
+          <polyline id="ecgLine" points="0,40 50,40 80,10 110,70 140,20 170,40 400,40" />
+        </svg>
+      </div>
+      <div class="splash-stats">
+        <div class="sp-stat"><span>5K+</span><p>Donors</p></div>
+        <div class="sp-stat"><span>1.2K</span><p>Lives Saved</p></div>
+        <div class="sp-stat"><span>200+</span><p>Hospitals</p></div>
+      </div>
+      <button class="splash-btn" id="enterBtn" onclick="openDashboard()">
+        <i class="fa-solid fa-arrow-right"></i> Enter App
+      </button>
+    </div>
+  </section>
+
+    <!-- ===== LOGIN PAGE ===== -->
+  <section class="login-page" id="loginPage">
+    <div class="login-card">
+
+      <div class="login-logo">
+        <i class="fa-solid fa-heart-pulse"></i>
+      </div>
+
+      <h1 id="loginWelcomeTitle">Welcome to HemoBridge</h1>
+
+      <p id="loginWelcomeDesc">Save Lives · Be a Hero</p>
+
+      <!-- Tabs for Login / Register -->
+      <div class="login-tabs">
+        <button class="login-tab-btn active" onclick="switchLoginTab('login')">Login</button>
+        <button class="login-tab-btn" onclick="switchLoginTab('register')">Register</button>
+      </div>
+
+      <!-- Login Form Panel -->
+      <div id="loginTabContent" class="tab-content active-tab-content">
+        <input type="tel"
+          id="loginPhone"
+          placeholder="Enter Phone Number">
+          
+        <input type="password"
+          id="loginPassword"
+          placeholder="Enter Password">
+
+        <button onclick="loginUser()">
+          Login
+        </button>
+      </div>
+
+      <!-- Register Form Panel -->
+      <div id="registerTabContent" class="tab-content">
+        <div class="register-scroll-container">
+          <input type="text"
+            id="regFullName"
+            placeholder="Full Name (as in Aadhaar ID)">
+
+          <input type="tel"
+            id="regPhone"
+            placeholder="Phone Number">
+            <button type="button" class="btn-otp" onclick="sendRegisterOTP()">
+  <i class="fa-solid fa-shield-halved"></i> Send OTP
+</button>
+<input type="text"
+  id="regOtp"
+  placeholder="Enter OTP"
+  style="display:none;">
+
+<button type="button" id="regVerifyOtpBtn" class="btn-otp-verify" onclick="verifyRegisterOTP()" style="display:none;">
+  <i class="fa-solid fa-circle-check"></i> Verify OTP
+</button>
+ 
+
+<div id="regOtpStatus"
+  style="display:none;color:green;font-weight:600;">
+</div>
+          
+          <div class="reg-row">
+            <input type="number"
+              id="regAge"
+              placeholder="Age"
+              min="18"
+              max="65">
+            <select id="regGender">
+              <option value="">Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="reg-row">
+            <select id="regBloodGroup">
+              <option value="">Blood Group</option>
+              <option>A+</option><option>A-</option>
+              <option>B+</option><option>B-</option>
+              <option>AB+</option><option>AB-</option>
+              <option>O+</option><option>O-</option>
+            </select>
+            <input type="number"
+              id="regWeight"
+              placeholder="Weight (kg)">
+          </div>
+
+          <div class="reg-select-group">
+            <label for="regLastDonation">Donated in last 3 months?</label>
+            <select id="regLastDonation">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          <input type="password"
+            id="regPassword"
+            placeholder="Create Password">
+        </div>
+
+        <button onclick="registerUser()">
+          Register
+        </button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== MAIN APP ===== -->
+  <div class="main-container" id="mainApp">
+
+    <!-- TOP BAR -->
+    <header class="top-bar">
+      <div class="top-logo"><i class="fa-solid fa-heart-pulse"></i> HemoBridge</div>
+      <div class="top-actions">
+        <div class="notif-bell" id="notifBell" onclick="toggleNotifPanel()">
+          <i class="fa-solid fa-bell"></i>
+          <span class="notif-dot" id="notifDot"></span>
+        </div>
+        <div class="top-avatar" id="topAvatar" onclick="toggleAvatarDropdown()">AK</div>
+      </div>
+    </header>
+
+    <!-- NOTIFICATION PANEL -->
+    <div class="notif-panel" id="notifPanel">
+      <div class="notif-header"><h3>Notifications</h3><button onclick="clearNotifs()">Clear All</button></div>
+      <div class="notif-list" id="notifList">
+        <div class="notif-item urgent"><i class="fa-solid fa-droplet"></i><div><strong>URGENT:</strong> O- needed at Apollo Hospital<span>2 min ago</span></div></div>
+        <div class="notif-item"><i class="fa-solid fa-check-circle"></i><div>Your donation request was accepted<span>1 hr ago</span></div></div>
+        <div class="notif-item"><i class="fa-solid fa-user-plus"></i><div>New donor registered near you<span>3 hr ago</span></div></div>
+      </div>
+    </div>
+
+    <!-- USER ACTIONS DROPDOWN -->
+    <div class="avatar-dropdown" id="avatarDropdown">
+      <div class="dropdown-header">
+        <div class="dropdown-avatar" id="dropdownAvatar">AK</div>
+        <div class="dropdown-user-info">
+          <h4 id="dropdownName">Akshay Kumar</h4>
+          <span class="dropdown-role" id="dropdownRole">Regular Blood Donor ❤️</span>
+        </div>
+      </div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-body">
+        <div class="dropdown-item">
+          <i class="fa-solid fa-language"></i>
+          <span id="lblLanguage">Select Language</span>
+          <select id="langSelect" onchange="changeLanguage(this.value)">
+            <option value="en">English</option>
+            <option value="hi">हिन्दी (Hindi)</option>
+            <option value="te">తెలుగు (Telugu)</option>
+          </select>
+        </div>
+      </div>
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-footer">
+        <button class="btn-logout" onclick="logoutUser()">
+          <i class="fa-solid fa-right-from-bracket"></i> <span id="lblLogout">Logout</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== HOME PAGE ===== -->
+    <section class="page active-page" id="homePage">
+
+      <!-- HERO -->
+      <section class="hero">
+        <div class="hero-particles"></div>
+        <div class="hero-left">
+          <div class="hero-badge"><i class="fa-solid fa-circle-dot pulse-dot"></i> Live Matching Active</div>
+          <h1>Every Drop<br><span class="gradient-text">Saves a Life</span></h1>
+          <p>Connecting blood donors and patients instantly during emergencies. Join India's fastest blood network.</p>
+          <div class="hero-buttons">
+            <button class="btn-primary" onclick="showPage('donorPage', document.querySelectorAll('.nav-item')[1])">
+              <i class="fa-solid fa-droplet"></i> Register as Donor
+            </button>
+            <button class="btn-outline" onclick="showPage('requestPage', document.querySelectorAll('.nav-item')[2])">
+              <i class="fa-solid fa-hospital"></i> Request Blood
+            </button>
+          </div>
+        </div>
+        <div class="hero-right">
+          <div class="hero-card glass">
+            <div class="blood-type-ring">
+              <svg viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="50" class="ring-bg"/>
+                <circle cx="60" cy="60" r="50" class="ring-fill" id="ringFill"/>
+              </svg>
+              <div class="ring-center"><span id="ringType">O+</span><small>Universal</small></div>
+            </div>
+            <p class="card-label">Most Needed Right Now</p>
+            <div class="blood-types-mini">
+              <span class="bt active" data-type="O+" onclick="setBloodType(this,'O+','Universal Donor')">O+</span>
+              <span class="bt" data-type="A+" onclick="setBloodType(this,'A+','Common Type')">A+</span>
+              <span class="bt" data-type="B+" onclick="setBloodType(this,'B+','Common Type')">B+</span>
+              <span class="bt danger" data-type="O-" onclick="setBloodType(this,'O-','Rarest Type')">O-</span>
+              <span class="bt" data-type="AB+" onclick="setBloodType(this,'AB+','Universal Recipient')">AB+</span>
+              <span class="bt" data-type="B-" onclick="setBloodType(this,'B-','Rare Type')">B-</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STATS -->
+      <section class="stats-grid">
+        <div class="stat-card" data-delay="0">
+          <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
+          <h2 class="counter" data-target="5000">0</h2>
+          <p>Total Donors</p>
+          <div class="stat-bar"><div class="stat-fill" style="width:85%"></div></div>
+        </div>
+        <div class="stat-card" data-delay="100">
+          <div class="stat-icon"><i class="fa-solid fa-heart"></i></div>
+          <h2 class="counter" data-target="1200">0</h2>
+          <p>Lives Saved</p>
+          <div class="stat-bar"><div class="stat-fill" style="width:65%"></div></div>
+        </div>
+        <div class="stat-card" data-delay="200">
+          <div class="stat-icon"><i class="fa-solid fa-hospital"></i></div>
+          <h2 class="counter" data-target="200">0</h2>
+          <p>Partner Hospitals</p>
+          <div class="stat-bar"><div class="stat-fill" style="width:40%"></div></div>
+        </div>
+        <div class="stat-card" data-delay="300">
+          <div class="stat-icon"><i class="fa-solid fa-bolt"></i></div>
+          <h2 class="counter" data-target="450">0</h2>
+          <p>Emergency Requests</p>
+          <div class="stat-bar"><div class="stat-fill" style="width:50%"></div></div>
+        </div>
+      </section>
+
+      <!-- BLOOD AVAILABILITY CHART -->
+      <section class="section-block">
+        <div class="section-header">
+          <h2><i class="fa-solid fa-chart-bar"></i> Blood Stock Levels</h2>
+          <span class="live-badge"><i class="fa-solid fa-circle"></i> Live</span>
+        </div>
+        <div class="blood-chart">
+          <div class="chart-bars" id="chartBars"></div>
+          <div class="chart-labels" id="chartLabels"></div>
+        </div>
+      </section>
+
+      <!-- COMPATIBILITY CHECKER -->
+      <section class="section-block">
+        <div class="section-header">
+          <h2><i class="fa-solid fa-circle-check"></i> Compatibility Checker</h2>
+        </div>
+        <div class="compat-card glass">
+          <div class="compat-selects">
+            <div class="compat-field">
+              <label>Your Blood Type</label>
+              <select id="donorType" onchange="checkCompat()">
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option selected>O+</option><option>O-</option>
+              </select>
+            </div>
+            <div class="compat-arrow"><i class="fa-solid fa-arrow-right-arrow-left"></i></div>
+            <div class="compat-field">
+              <label>Recipient Blood Type</label>
+              <select id="recipientType" onchange="checkCompat()">
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option selected>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+              </select>
+            </div>
+          </div>
+          <div class="compat-result" id="compatResult">
+            <i class="fa-solid fa-check-circle"></i>
+            <span id="compatText">Compatible! O+ can donate to AB+</span>
+          </div>
+        </div>
+        </section>
+
+      <!-- EMERGENCY ALERT -->
+      <section class="emergency-section">
+        <div class="emergency-card">
+          <div class="emer-glow"></div>
+          <div class="emer-top">
+            <div class="emer-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="emer-badge">URGENT</div>
+          </div>
+          <h2>O- Blood Required</h2>
+          <p><i class="fa-solid fa-location-dot"></i> Apollo Hospital, Hyderabad</p>
+          <p class="emer-time"><i class="fa-solid fa-clock"></i> Posted 5 minutes ago · 3 units needed</p>
+          <div class="emer-actions">
+            <button class="btn-emer" onclick="sendAlert()"><i class="fa-solid fa-bolt"></i> Respond Now</button>
+            <button class="btn-emer-outline" onclick="shareAlert()"><i class="fa-solid fa-share-nodes"></i> Share Alert</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- LOCATION TRACKER CONTROL -->
+      <section class="section-block">
+        <div class="section-header">
+          <h2><i class="fa-solid fa-location-crosshairs"></i> Live Location Tracker</h2>
+          <span class="live-badge" id="locationLiveBadge"><i class="fa-solid fa-circle"></i> Off</span>
+        </div>
+        <div class="location-card glass">
+          <div class="location-controls">
+            <button class="btn-primary" id="trackLocBtn" onclick="toggleLocationTracking()">
+              <i class="fa-solid fa-location-arrow"></i> Track My Location
+            </button>
+            <div class="simulate-group">
+              <label for="locSimulate">Simulate Area:</label>
+              <select id="locSimulate" onchange="simulateLocationChange(this.value)">
+                <option value="">-- Choose Area --</option>
+                <option value="madhapur">Madhapur, Hyderabad</option>
+                <option value="jubileehills">Jubilee Hills, Hyderabad</option>
+                <option value="gachibowli">Gachibowli, Hyderabad</option>
+                <option value="secunderabad">Secunderabad, Hyderabad</option>
+              </select>
+            </div>
+          </div>
+          <div class="location-details" id="locationDetails">
+            <div class="loc-detail-item">
+              <span class="label">Coordinates:</span>
+              <span class="value" id="locCoords">Not tracked</span>
+            </div>
+            <div class="loc-detail-item">
+              <span class="label">Address:</span>
+              <span class="value" id="locAddress">Click 'Track My Location' or select a simulated area</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- NEARBY DONORS MAP -->
+      <section class="section-block">
+        <div class="section-header">
+          <h2><i class="fa-solid fa-map-location-dot"></i> Nearby Donors</h2>
+          <span class="view-all" onclick="showPage('donorPage', document.querySelectorAll('.nav-item')[1])">View All →</span>
+        </div>
+        <div class="map-container" id="mapContainer">
+          <div class="map-bg"></div>
+          <div class="map-pulse" style="left:40%;top:35%"><div class="pulse-ring"></div><div class="map-pin red"><i class="fa-solid fa-droplet"></i></div><div class="map-tooltip">Dhana · O+</div></div>
+          <div class="map-pulse" style="left:60%;top:55%"><div class="pulse-ring"></div><div class="map-pin"><i class="fa-solid fa-droplet"></i></div><div class="map-tooltip">Priya · A+</div></div>
+          <div class="map-pulse" style="left:25%;top:60%"><div class="pulse-ring"></div><div class="map-pin"><i class="fa-solid fa-droplet"></i></div><div class="map-tooltip">Raj · B+</div></div>
+          <div class="map-pulse" style="left:70%;top:30%"><div class="pulse-ring"></div><div class="map-pin danger"><i class="fa-solid fa-droplet"></i></div><div class="map-tooltip">Kiran · O-</div></div>
+          <div class="map-center"><i class="fa-solid fa-location-crosshairs"></i><span>You</span></div>
+        </div>
+      </section>
+
+    </section>
+
+    <!-- ===== DONORS PAGE ===== -->
+    <section class="page" id="donorPage">
+      <div class="page-header">
+        <h1><i class="fa-solid fa-droplet"></i> Donor Registration</h1>
+        <p>Join our network of life-savers</p>
+      </div>
+
+      <!-- SEARCH BAR -->
+      <div class="search-bar">
+        <i class="fa-solid fa-search"></i>
+        <input type="text" id="donorSearch" placeholder="Search donors by name, blood type, location..." oninput="filterDonors()" />
+        <select id="bloodFilter" onchange="filterDonors()">
+          <option value="">All Types</option>
+          <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+          <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+        </select>
+      </div>
+
+      <!-- ELIGIBILITY CHECKER -->
+
+      <div class="eligibility-progress">
+        <div class="eligibility-progress-fill" id="eligibilityProgress"></div>
+      </div>
+
+      <p class="eligibility-step" id="eligibilityStep">
+        Complete eligibility questions
+      </p>
+
+
+      <div class="form-card glass">
+        <div class="form-title">
+          <i class="fa-solid fa-shield-heart"></i>
+          Donor Eligibility Checker
+        </div>
+
+        <div class="form-grid">
+
+          <div class="input-group">
+            <label>Age 18+ ?</label>
+            <select id="ageEligible">
+              <option value="">Select</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label>Weight Above 50kg ?</label>
+            <select id="weightEligible">
+              <option value="">Select</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label>Donated Blood In Last 3 Months ?</label>
+            <select id="recentDonation">
+              <option value="">Select</option>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+        </div>
+
+        <button class="btn-primary full-btn"
+                onclick="checkEligibility()">
+          Check Eligibility
+        </button>
+
+        <p id="eligibilityResult"
+          style="margin-top:15px;font-weight:700;">
+        </p>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <div class="form-card glass" id="donorRegisterForm" style="display:none;">
+        <div class="form-title"><i class="fa-solid fa-user-plus"></i> Register as Donor</div>
+        <div class="form-grid">
+          <div class="input-group">
+            <label>Full Name</label>
+            <input type="text" id="dName" placeholder="Enter your full name" />
+          </div>
+          <div class="input-group">
+            <label>Blood Group</label>
+            <select id="dBlood">
+              <option value="">Select Blood Group</option>
+              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+              <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Age</label>
+            <input type="number" id="dAge" placeholder="Your age" min="18" max="65" />
+          </div>
+          <div class="input-group">
+            <label>Phone Number</label>
+            <input type="tel" id="dPhone" placeholder="+91 XXXXX XXXXX" />
+          </div>
+          <div class="input-group">
+    
+ <button type="button" class="btn-otp" onclick="sendDonorOTP()">
+    <i class="fa-solid fa-shield-halved"></i> Send OTP
+</button>
+</div>
+
+<div class="input-group">
+  <input type="text"
+         id="dOtp"
+         placeholder="Enter OTP"
+         style="display:none;">
+</div>
+
+<div class="input-group">
+  <button type="button" id="verifyDonorOtpBtn" class="btn-otp-verify" onclick="verifyDonorOTP()" style="display:none;">
+    <i class="fa-solid fa-circle-check"></i> Verify OTP
+</button>
+    Verify OTP
+  </button>
+</div>
+
+<div id="dOtpStatus"
+     style="display:none;color:green;font-weight:600;">
+</div>
+            
+
+
+
+  
+          <div class="input-group full-width location-input-wrap">
+            <label>Location / City</label>
+            <div class="input-with-btn">
+              <input type="text" id="dLocation" placeholder="Your city or area" />
+              <button class="btn-location-autofill" onclick="autofillLocation('dLocation')" title="Autofill current location">
+                <i class="fa-solid fa-location-crosshairs"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <button class="btn-primary full-btn" onclick="registerDonor()">
+          <i class="fa-solid fa-heart"></i> Register as Donor
+        </button>
+      </div>
+
+      <!-- DONOR CARDS -->
+      <div class="section-header mt-30">
+        <h2>Available Donors <span id="donorCount" class="count-badge">4</span></h2>
+        <div class="sort-btns">
+          <button class="sort-btn active" onclick="sortDonors('distance', this)">Nearest</button>
+          <button class="sort-btn" onclick="sortDonors('name', this)">Name</button>
+        </div>
+      </div>
+      <div class="donor-grid" id="donorGrid"></div>
+    </section>
+
+    <!-- ===== REQUEST PAGE ===== -->
+    <section class="page" id="requestPage">
+      <div class="page-header">
+        <h1><i class="fa-solid fa-hospital"></i> Request Blood</h1>
+        <p>Emergency blood request system</p>
+      </div>
+
+      <div class="request-urgency">
+        <div class="urgency-btn active" data-level="normal" onclick="setUrgency(this,'normal')"><i class="fa-solid fa-clock"></i> Normal</div>
+        <div class="urgency-btn" data-level="urgent" onclick="setUrgency(this,'urgent')"><i class="fa-solid fa-bolt"></i> Urgent</div>
+        <div class="urgency-btn" data-level="critical" onclick="setUrgency(this,'critical')"><i class="fa-solid fa-triangle-exclamation"></i> Critical</div>
+      </div>
+
+      <div class="form-card glass">
+        <div class="form-title"><i class="fa-solid fa-file-medical"></i> Request Form</div>
+        <div class="form-grid">
+          <div class="input-group">
+            <label>Patient Name</label>
+            <input type="text" id="rName" placeholder="Patient's full name" />
+          </div>
+          <div class="input-group">
+            <label>Blood Group Needed</label>
+            <select id="rBlood">
+              <option value="">Select Blood Group</option>
+              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+              <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Units Required</label>
+            <input type="number" id="rUnits" placeholder="No. of units" min="1" max="10" />
+          </div>
+          <div class="input-group">
+            <label>Contact Number</label>
+            <input type="tel" id="rPhone" placeholder="+91 XXXXX XXXXX" />
+          </div>
+          <div class="input-group">
+            <label>Hospital Name</label>
+            <input type="text" id="rHospital" placeholder="Hospital name" />
+          </div>
+          <div class="input-group location-input-wrap">
+            <label>Location</label>
+            <div class="input-with-btn">
+              <input type="text" id="rLocation" placeholder="Hospital location" />
+              <button class="btn-location-autofill" onclick="autofillLocation('rLocation')" title="Autofill current location">
+                <i class="fa-solid fa-location-crosshairs"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+
+      <!-- OTP VERIFICATION -->
+     
+       <button class="btn-primary full-btn" onclick="submitRequest()">
+          <i class="fa-solid fa-paper-plane"></i> Send Emergency Request
+        </button>
+      </div>
+      <!-- ACTIVE REQUESTS -->
+      <div class="section-header mt-30">
+        <h2>Active Requests <span class="count-badge urgent-count">0</span></h2>
+      </div>
+      <div class="requests-list" id="requestsList"></div>
+    </section>
+
+     
+
+    <!-- ===== DASHBOARD PAGE ===== -->
+    <section class="page" id="dashPage">
+      <div class="page-header">
+        <h1><i class="fa-solid fa-chart-line"></i> Analytics Dashboard</h1>
+        <p>Real-time blood bank insights</p>
+      </div>
+
+      <div class="dash-grid">
+        <div class="dash-card glass">
+          <div class="dash-icon red"><i class="fa-solid fa-droplet"></i></div>
+          <div class="dash-info"><h3>Blood Units</h3><div class="dash-val">2,847</div><div class="dash-trend up"><i class="fa-solid fa-arrow-trend-up"></i> +12%</div></div>
+        </div>
+        <div class="dash-card glass">
+          <div class="dash-icon green"><i class="fa-solid fa-users"></i></div>
+          <div class="dash-info"><h3>Active Donors</h3><div class="dash-val">1,203</div><div class="dash-trend up"><i class="fa-solid fa-arrow-trend-up"></i> +8%</div></div>
+        </div>
+        <div class="dash-card glass">
+          <div class="dash-icon orange"><i class="fa-solid fa-bell"></i></div>
+          <div class="dash-info"><h3>Pending Requests</h3><div class="dash-val">47</div><div class="dash-trend down"><i class="fa-solid fa-arrow-trend-down"></i> -3%</div></div>
+        </div>
+        <div class="dash-card glass">
+          <div class="dash-icon purple"><i class="fa-solid fa-heart"></i></div>
+          <div class="dash-info"><h3>Successful Matches</h3><div class="dash-val">389</div><div class="dash-trend up"><i class="fa-solid fa-arrow-trend-up"></i> +21%</div></div>
+        </div>
+      </div>
+
+      <!-- DONUT CHART -->
+      <div class="section-block">
+        <div class="section-header"><h2><i class="fa-solid fa-chart-pie"></i> Blood Type Distribution</h2></div>
+        <div class="donut-section">
+          <div class="donut-wrap">
+            <svg viewBox="0 0 200 200" id="donutSvg"></svg>
+            <div class="donut-center"><span id="donutVal">O+</span><small>Most Common</small></div>
+          </div>
+          <div class="donut-legend" id="donutLegend"></div>
+        </div>
+      </div>
+
+      <!-- ACTIVITY FEED -->
+      <div class="section-block">
+        <div class="section-header"><h2><i class="fa-solid fa-timeline"></i> Live Activity Feed</h2><span class="live-badge"><i class="fa-solid fa-circle"></i> Live</span></div>
+        <div class="activity-feed" id="activityFeed"></div>
+      </div>
+    </section>
+
+    <!-- ===== PROFILE PAGE ===== -->
+    <section class="page" id="profilePage">
+      <div class="profile-hero">
+        <div class="profile-bg-glow"></div>
+        <div class="profile-avatar-wrap">
+          <div class="profile-avatar">AK</div>
+          <div class="profile-badge-ring"><i class="fa-solid fa-droplet"></i></div>
+        </div>
+        <h2>Akshay Kumar</h2>
+        <p class="profile-role">Regular Blood Donor ❤️</p>
+        <div class="profile-blood-badge">O+</div>
+      </div>
+
+      <div class="profile-stats">
+        <div class="p-stat"><i class="fa-solid fa-syringe"></i><h3 class="counter" data-target="10">0</h3><p>Donations</p></div>
+        <div class="p-stat"><i class="fa-solid fa-heart"></i><h3 class="counter" data-target="5">0</h3><p>Lives Saved</p></div>
+        <div class="p-stat"><i class="fa-solid fa-medal"></i><h3>Gold</h3><p>Rank</p></div>
+        <div class="p-stat"><i class="fa-solid fa-star"></i><h3>4.9</h3><p>Rating</p></div>
+      </div>
+
+      <!-- PROFILE DETAILS CARD -->
+      <div class="section-block">
+        <div class="section-header">
+          <h2><i class="fa-solid fa-user-check"></i> Profile Details</h2>
+          <button class="btn-profile-edit" onclick="openEditProfileModal()"><i class="fa-solid fa-user-pen"></i> Edit</button>
+        </div>
+        <div class="profile-details-card glass">
+          <div class="p-detail-item">
+            <span class="label">Full Name</span>
+            <span class="value" id="profFullName">-</span>
+          </div>
+          <div class="p-detail-item">
+            <span class="label">Phone Number</span>
+            <span class="value" id="profPhone">-</span>
+          </div>
+          <div class="p-detail-item">
+            <span class="label">Age</span>
+            <span class="value" id="profAge">-</span>
+          </div>
+          <div class="p-detail-item">
+            <span class="label">Gender</span>
+            <span class="value" id="profGender">-</span>
+          </div>
+          <div class="p-detail-item">
+            <span class="label">Blood Group</span>
+            <span class="value" id="profBlood">-</span>
+          </div>
+          <div class="p-detail-item">
+            <span class="label">Weight</span>
+            <span class="value" id="profWeight">-</span>
+          </div>
+          <div class="p-detail-item">
+            <span class="label">Donated recently?</span>
+            <span class="value" id="profLastDonation">-</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-block">
+        <div class="section-header"><h2><i class="fa-solid fa-calendar-check"></i> Donation History</h2></div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+
+      <div class="section-block">
+        <div class="section-header"><h2><i class="fa-solid fa-trophy"></i> Achievements</h2></div>
+        <div class="achievements-grid" id="achievementsGrid"></div>
+      </div>
+
+      <div class="section-block">
+        <div class="section-header"><h2><i class="fa-solid fa-gear"></i> Settings</h2></div>
+        <div class="settings-list">
+          <div class="setting-item"><i class="fa-solid fa-bell"></i><span>Push Notifications</span><label class="toggle"><input type="checkbox" checked /><span class="slider"></span></label></div>
+          <div class="setting-item"><i class="fa-solid fa-location-dot"></i><span>Location Sharing</span><label class="toggle"><input type="checkbox" checked /><span class="slider"></span></label></div>
+          <div class="setting-item"><i class="fa-solid fa-envelope"></i><span>Email Updates</span><label class="toggle"><input type="checkbox" /><span class="slider"></span></label></div>
+          <div class="setting-item"><i class="fa-solid fa-shield"></i><span>Privacy Mode</span><label class="toggle"><input type="checkbox" /><span class="slider"></span></label></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== BOTTOM NAV ===== -->
+    <nav class="bottom-nav" id="bottomNav">
+      <div class="nav-item active-nav" onclick="showPage('homePage', this)">
+        <i class="fa-solid fa-house"></i><span>Home</span>
+      </div>
+      <div class="nav-item" onclick="showPage('donorPage', this)">
+        <i class="fa-solid fa-droplet"></i><span>Donors</span>
+      </div>
+      <div class="nav-item nav-center" onclick="showPage('requestPage', this)">
+        <div class="nav-center-btn"><i class="fa-solid fa-hospital"></i></div><span>Request</span>
+      </div>
+      <div class="nav-item" onclick="showPage('dashPage', this)">
+        <i class="fa-solid fa-chart-line"></i><span>Analytics</span>
+      </div>
+      <div class="nav-item" onclick="showPage('profilePage', this)">
+        <i class="fa-solid fa-user"></i><span>Profile</span>
+      </div>
+    </nav>
+
+  </div>
+
+  <!-- CHATBOT WIDGET -->
+  <div class="chatbot-container" id="chatbotContainer">
+    <!-- Chat Toggle Button -->
+    <button class="chatbot-toggle" id="chatbotToggle" onclick="toggleChatbot()">
+      <i class="fa-solid fa-comments"></i>
+      <span class="chat-badge" id="chatBadge">1</span>
+    </button>
+
+    <!-- Chat Panel -->
+    <div class="chat-panel glass" id="chatPanel">
+      <div class="chat-header">
+        <div class="chat-avatar-status">
+          <div class="chat-avatar"><i class="fa-solid fa-heart-pulse"></i></div>
+          <div class="chat-status-info">
+            <h4>HemoBot</h4>
+            <span class="status-indicator"><span class="dot"></span> Online</span>
+          </div>
+        </div>
+        <button class="chat-close-btn" onclick="toggleChatbot()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg bot">
+          <div class="msg-bubble">
+            Hello! I am HemoBot, your virtual blood donation assistant. How can I help you save lives today?
+          </div>
+          <span class="msg-time">Just now</span>
+        </div>
+      </div>
+
+      <div class="chat-chips-container">
+        <span class="chat-chip" onclick="sendQuickQuery('Who needs blood urgently right now?')">Urgent Needs</span>
+        <span class="chat-chip" onclick="sendQuickQuery('Can O- donate to AB+?')">Check Compatibility</span>
+        <span class="chat-chip" onclick="sendQuickQuery('Who is the nearest donor to me?')">Find Nearest Donor</span>
+      </div>
+
+      <div class="chat-input-area">
+        <textarea id="chatInput" placeholder="Type a message..." rows="1" onkeydown="handleChatKey(event)"></textarea>
+        <button id="chatSendBtn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModal()">
+    <div class="modal-box" id="modalBox" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/static/supabase.js"></script>
+<script src="/static/script.js"></script>
+
+ 
+</body>
+</html>
