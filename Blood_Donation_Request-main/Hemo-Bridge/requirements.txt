@@ -1,2 +1,6 @@
-Flask
+flask
 gunicorn
+supabase
+requests
+python-dotenv
+flask-cors
