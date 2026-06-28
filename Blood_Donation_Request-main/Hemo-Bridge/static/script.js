@@ -332,14 +332,14 @@ function switchLoginTab(tab) {
 async function registerUser() {
     const fullName = document.getElementById('regFullName').value.trim();
     const phone = document.getElementById('regPhone').value.trim();
-    const dob = document.getElementById('regDOB').value;
+    const age = document.getElementById('regAge').value;
     const gender = document.getElementById('regGender').value;
     const bloodGroup = document.getElementById('regBloodGroup').value;
     const weight = document.getElementById('regWeight').value.trim();
     const lastDonation = document.getElementById('regLastDonation').value;
     const password = document.getElementById('regPassword').value;
 
-    if (!fullName || !phone || !dob || !gender || !bloodGroup || !weight || !password) {
+    if (!fullName || !phone || !age || !gender || !bloodGroup || !weight || !password) {
         showToast('Please fill out all registration fields.');
         return;
     }
@@ -349,19 +349,7 @@ async function registerUser() {
         return;
     }
 
-    const birthDate = new Date(dob);
-    const today = new Date();
-
-    let ageNum = today.getFullYear() - birthDate.getFullYear();
-
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-
-    if (
-        monthDiff < 0 ||
-        (monthDiff === 0 && today.getDate() < birthDate.getDate())
-    ) {
-        ageNum--;
-    }
+    const ageNum = parseInt(age);
 
     if (ageNum < 18) {
         showToast('You must be at least 18 years old to donate blood.');
@@ -384,7 +372,6 @@ async function registerUser() {
         return;
     }
 
-
     const userData = {
         fullName,
         phone,
@@ -403,23 +390,21 @@ async function registerUser() {
         sessionPassword = password;
         window.currentUserDetails = userData;
         
-        // Dynamic UI Updates
         updateAvatarUI(fullName);
-        
-        // Proceed to app
         enterAppDashboard();
+        fetchDonors();
+        fetchRequests();
         showToast('Registration & Encryption Successful!');
         
         // Clear fields
         document.getElementById('regFullName').value = '';
         document.getElementById('regPhone').value = '';
-        document.getElementById('regDOB').value = '';
+        document.getElementById('regAge').value = '';
         document.getElementById('regGender').value = '';
         document.getElementById('regBloodGroup').value = '';
         document.getElementById('regWeight').value = '';
         document.getElementById('regPassword').value = '';
         registerOtpVerified = false;
-
         document.getElementById("regOtp").value = "";
         document.getElementById("regOtp").style.display = "none";
         document.getElementById("regVerifyOtpBtn").style.display = "none";
@@ -485,10 +470,8 @@ function updateAvatarUI(name) {
     const avatarElems = document.querySelectorAll('.top-avatar');
     avatarElems.forEach(el => el.innerText = initials);
     
-    // Also update dropdown name and profile info if they exist
     const dName = document.getElementById('dropdownName');
-   "block";
-         if (dName) dName.innerText = name;
+    if (dName) dName.innerText = name;
     const dpAvatar = document.getElementById('dropdownAvatar');
     if (dpAvatar) dpAvatar.innerText = initials;
 }
