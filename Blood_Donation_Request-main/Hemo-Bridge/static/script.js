@@ -1,4 +1,12 @@
-// ===== PARTICLE SYSTEM =====
+// Fix mobile button clicks
+document.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        this.click();
+    });
+});
+
+// ===== PARTICLE SYSTEM ===== (OUTSIDE DOMContentLoaded)
 const canvas = document.getElementById('particleCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -11,7 +19,6 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
-
 class Particle {
     constructor() {
         this.x = Math.random() * canvas.width;
@@ -25,7 +32,6 @@ class Particle {
     update() {
         this.x += this.vx;
         this.y += this.vy;
-
         if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
         if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
     }
