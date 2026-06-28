@@ -356,12 +356,10 @@ async function registerUser() {
     }
 
     const ageNum = parseInt(age);
-
     if (ageNum < 18) {
         showToast('You must be at least 18 years old to donate blood.');
         return;
     }
-
     if (ageNum > 65) {
         showToast('Maximum donor age is 65 years.');
         return;
@@ -378,97 +376,111 @@ async function registerUser() {
         return;
     }
 
-    const userData = {
-        fullName,
-        phone,
-        age: ageNum,
-        gender,
-        bloodGroup,
-        weight: weightNum,
-        lastDonation
-    };
+    // Check if phone already registered
+    const { data: existing } = await window.supabaseClient
+        .from('users')
+        .select('id')
+        .eq('phone', phone)
+        .single();
 
-    try {
-        showToast('Encrypting and registering...');
-        const encrypted = await encryptData(userData, password);
-        localStorage.setItem('user_data_' + phone, JSON.stringify(encrypted));
-        
-        sessionPassword = password;
-        window.currentUserDetails = userData;
-        
-        updateAvatarUI(fullName);
-        enterAppDashboard();
-        fetchDonors();
-        fetchRequests();
-        showToast('Registration & Encryption Successful!');
-        
-        // Clear fields
-        document.getElementById('regFullName').value = '';
-        document.getElementById('regPhone').value = '';
-        document.getElementById('regAge').value = '';
-        document.getElementById('regGender').value = '';
-        document.getElementById('regBloodGroup').value = '';
-        document.getElementById('regWeight').value = '';
-        document.getElementById('regPassword').value = '';
-        registerOtpVerified = false;
-        document.getElementById("regOtp").value = "";
-        document.getElementById("regOtp").style.display = "none";
-        document.getElementById("regVerifyOtpBtn").style.display = "none";
-        document.getElementById("regOtpStatus").style.display = "none";
-    } catch (e) {
-        console.error("Encryption/Registration failed:", e);
-        showToast('Registration failed due to encryption error.');
+    if (existing) {
+        showToast('Phone number already registered!');
+        return;
     }
-}
 
+    // Save to Supabase
+    const { error } = await window.supabaseClient
+        .from('users')
+        .insert([{
+            full_name: fullName,
+            phone: phone,
+            age: ageNum,
+            gender: gender,
+            blood_group: bloodGroup,
+            weight: weightNum,
+            last_donation: lastDonation,
+            password: password
+        }]);
+
+    if (error) {
+        console.error(error);
+        showToast('Registration failed. Try again.');
+        return;
+    }
+
+    // Save locally for session
+    const userData = { fullName, phone, age: ageNum, gender, bloodGroup, weight: weightNum, lastDonation };
+    window.currentUserDetails = userData;
+    sessionPassword = password;
+
+    updateAvatarUI(fullName);
+    enterAppDashboard();
+    fetchDonors();
+    fetchRequests();
+    showToast('Registration Successful!');
+
+    // Clear fields
+    document.getElementById('regFullName').value = '';
+    document.getElementById('regPhone').value = '';
+    document.getElementById('regAge').value = '';
+    document.getElementById('regGender').value = '';
+    document.getElementById('regBloodGroup').value = '';
+    document.getElementById('regWeight').value = '';
+    document.getElementById('regPassword').value = '';
+    registerOtpVerified = false;
+    document.getElementById("regOtp").value = "";
+    document.getElementById("regOtp").style.display = "none";
+    document.getElementById("regVerifyOtpBtn").style.display = "none";
+    document.getElementById("regOtpStatus").style.display = "none";
+}
 // User Login with Decryption
 async function loginUser() {
     console.log("Login button clicked");
 
-    
     const phone = document.getElementById('loginPhone').value.trim();
     const password = document.getElementById('loginPassword').value;
-    console.log("Phone:", phone);
-    console.log("Password:", password);
-
-    console.log(phone, password);
 
     if (!phone || !password) {
         showToast('Please enter Phone Number and Password');
         return;
     }
 
-    const encryptedDataStr = localStorage.getItem('user_data_' + phone);
-    console.log("Stored Data:", encryptedDataStr);
-    if (!encryptedDataStr) {
-        showToast('Account not found. Please register first.');
+    // Check Supabase for user
+    const { data: user, error } = await window.supabaseClient
+        .from('users')
+        .select('*')
+        .eq('phone', phone)
+        .eq('password', password)
+        .single();
+
+    if (error || !user) {
+        showToast('Invalid phone number or password.');
         return;
     }
 
-    try {
-        const encryptedObj = JSON.parse(encryptedDataStr);
-        showToast('Decrypting profile securely...');
-        const decrypted = await decryptData(encryptedObj, password);
-        
-        // Validated successfully
-        sessionPassword = password;
-        window.currentUserDetails = decrypted;
-        
-        // Dynamic UI Updates
-        updateAvatarUI(decrypted.fullName);
-        
-        enterAppDashboard();
-        fetchDonors();
-        fetchRequests();
-        showToast('Login & Decryption Successful!');
-        
-        // Clear fields
-        document.getElementById('loginPhone').value = '';
-        document.getElementById('loginPassword').value = '';
-    } catch (e) {
-        console.error("Decryption/Login failed:", e);
-        showToast('Incorrect password.');
-    }
+    // Login successful
+    const userData = {
+        fullName: user.full_name,
+        phone: user.phone,
+        age: user.age,
+        gender: user.gender,
+        bloodGroup: user.blood_group,
+        weight: user.weight,
+        lastDonation: user.last_donation
+    };
+
+    window.currentUserDetails = userData;
+    sessionPassword = password;
+
+    updateAvatarUI(user.full_name);
+    enterAppDashboard();
+    fetchDonors();
+    fetchRequests();
+    showToast('Login Successful!');
+
+    // Clear fields
+    document.getElementById('loginPhone').value = '';
+    document.getElementById('loginPassword').value = '';
 }
 
 function updateAvatarUI(name) {
